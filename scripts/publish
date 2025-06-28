@@ -1,7 +1,8 @@
 #!/bin/bash
 
-./mill -i mill.contrib.sonatypecentral.SonatypeCentralPublishModule/publishAll \
-    --username CiC1giTN \
-    --password "$(pass infra/s01.oss.sonatype.org | head -n 1)" \
+./mill mill.scalalib.PublishModule/publishAll \
+    --sonatypeUri https://maven.pkg.github.com/markarasev/simplesql \
+    --sonatypeCreds markarasev:$GITHUB_TOKEN\
+    --signed false \
     --publishArtifacts __.publishArtifacts \
-    --shouldRelease true
+    --stagingRelease false

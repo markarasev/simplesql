@@ -1,8 +1,5 @@
 import mill._, scalalib._, scalafmt._, publish._
 
-import $ivy.`com.lihaoyi::mill-contrib-sonatypecentral:`
-import mill.contrib.sonatypecentral.SonatypeCentralPublishModule
-
 trait Utest extends TestModule {
   def testFramework = "utest.runner.Framework"
   def ivyDeps = Agg(
@@ -11,18 +8,19 @@ trait Utest extends TestModule {
   )
 }
 
-object simplesql extends ScalaModule with ScalafmtModule with SonatypeCentralPublishModule {
-  def scalaVersion = "3.3.3"
+object simplesql extends ScalaModule with ScalafmtModule with PublishModule {
+  def scalaVersion = "3.3.5"
 
-  def publishVersion = "0.4.0"
+  def publishVersion = "0.1.0"
   def pomSettings = PomSettings(
     description = "Simple SQL queries around JDBC",
-    organization = "io.crashbox",
-    url = "https://github.com/jodersky/simplesql",
+    organization = "me.markarasev",
+    url = "https://github.com/markarasev/simplesql",
     licenses = Seq(License.`BSD-3-Clause`),
-    versionControl = VersionControl.github("jodersky", "simplesql"),
+    versionControl = VersionControl.github("markarasev", "simplesql"),
     developers = Seq(
-      Developer("jodersky", "Jakob Odersky", "https://github.com/jodersky")
+      Developer("jodersky", "Jakob Odersky", "https://github.com/jodersky"),
+      Developer("markarasev", "Marc Karassev", "https://github.com/markarasev"),
     )
   )
 
