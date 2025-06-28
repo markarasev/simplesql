@@ -55,7 +55,7 @@ extension (inline sc: StringContext)
 /** A thin wrapper around an SQL statement */
 case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
 
-  def read[A](using conn: Connection, r: Reader[A]): List[A] =
+  def read[A]()(using conn: Connection, r: Reader[A]): List[A] =
     val elems = collection.mutable.ListBuffer.empty[A]
 
     var stat: jsql.PreparedStatement = null
@@ -72,9 +72,9 @@ case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
       if stat != null then stat.close()
     elems.result()
 
-  def readOne[A](using Connection, Reader[A]): A = read[A].head
+  def readOne[A]()(using Connection, Reader[A]): A = read[A]().head
 
-  def readOpt[A](using Connection, Reader[A]): Option[A] = read[A].headOption
+  def readOpt[A]()(using Connection, Reader[A]): Option[A] = read[A]().headOption
 
   def write()(using conn: Connection): Int =
     var stat: jsql.PreparedStatement = null

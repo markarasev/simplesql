@@ -21,7 +21,7 @@ object NullTest extends TestSuite:
         sql"""insert into user values (${3}, null, ${"admin@example.org"})""".write() ==> 1
 
         case class User(id: Int, name: Option[String], email: String) derives sq.Reader
-        sql"select * from user".read[User] ==>
+        sql"select * from user".read[User]() ==>
           User(1, Some("admin"), "admin@example.org") ::
           User(2, None, "admin@example.org") ::
           User(3, None, "admin@example.org") :: Nil

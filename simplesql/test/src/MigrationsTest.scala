@@ -76,26 +76,26 @@ object MigrationsTest extends TestSuite:
 
       // check that database is empty initially
       ds.run:
-        sql"""select name from sqlite_master where type='table'""".read[String] ==> Nil
+        sql"""select name from sqlite_master where type='table'""".read[String]() ==> Nil
 
       mdb.applyUp("head")
 
       // check that database contains expected values after migrations
       ds.run:
-        sql"""select user_id from user_account""".read[Int] == List(1)
+        sql"""select user_id from user_account""".read[Int]() == List(1)
 
       mdb.applyUp("head") // should be a noop
       ds.run:
-        sql"""select user_id from user_account""".read[Int] == List(1)
+        sql"""select user_id from user_account""".read[Int]() == List(1)
 
       mdb.applyDown("base")
 
       // check that database is empty again
       ds.run:
-        sql"""select name from sqlite_master where type='table'""".read[String] ==> List("simplesql_migration")
+        sql"""select name from sqlite_master where type='table'""".read[String]() ==> List("simplesql_migration")
 
       mdb.applyDown("base") // should be a noop
       ds.run:
-        sql"""select name from sqlite_master where type='table'""".read[String] ==> List("simplesql_migration")
+        sql"""select name from sqlite_master where type='table'""".read[String]() ==> List("simplesql_migration")
     }
   }

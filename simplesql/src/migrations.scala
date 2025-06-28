@@ -216,7 +216,7 @@ class MigrationTool(
   def currentVersion(): String =
     ds.run:
       sql"""create table if not exists simplesql_migration (version text not null primary key)""".write()
-      sql"""select version from simplesql_migration""".readOpt[String] match
+      sql"""select version from simplesql_migration""".readOpt[String]() match
         case None => "base"
         case Some(v) => v
 

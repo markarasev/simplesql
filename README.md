@@ -37,13 +37,13 @@ ds.transaction:
     )
   """.write()
 
-  sql"select * from user".read[(Int, String, String)]
+  sql"select * from user".read[(Int, String, String)]()
   sql"""insert into user values (1, 'admin', 'admin@example.org')""".write()
 
   case class User(id: Int, name: String, email: String) derives sq.Reader
-  sql"select * from user".read[User]
+  sql"select * from user".read[User]()
 
-  sql"select name, id from user where id = ${1}".read[(String, Int)]
+  sql"select name, id from user where id = ${1}".read[(String, Int)]()
 ```
 
 ## Explanation
