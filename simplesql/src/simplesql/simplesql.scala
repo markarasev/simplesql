@@ -188,6 +188,8 @@ trait SimpleReader[+A]:
 
 object SimpleReader:
 
+  // TODO: safe NULLs? or at least throw an exception?
+
   given SimpleReader[Byte] with
     def readIdx(results: jsql.ResultSet, idx: Int) = results.getByte(idx)
     def readName(results: jsql.ResultSet, name: String) = results.getByte(name)
@@ -255,6 +257,8 @@ object SimpleReader:
 
   end given
 
+  // FIXME: can't use with Option[PrimitiveType] since reader instances for
+  //  primitive types will never return null.
   given optReader[T](using reader: SimpleReader[T]): SimpleReader[Option[T]] with
     override def readIdx(results: jsql.ResultSet, idx: Int): Option[T] =
       Option(reader.readIdx(results, idx))
