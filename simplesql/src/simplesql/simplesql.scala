@@ -47,11 +47,14 @@ import scala.annotation
 import java.util as ju
 import java.time.Instant
 
-@annotation.implicitNotFound("No database connection found. Make sure to call this in a `run()` or `transaction()` block.")
+@annotation.implicitNotFound(
+  "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
+)
 case class Connection(underlying: jsql.Connection)
 
 extension (inline sc: StringContext)
-  inline def sql(inline args: Any*): Query = ${Query.sqlImpl('{sc}, '{args})}
+  inline def sql(inline args: Any*): Query =
+    ${ Query.sqlImpl('{ sc }, '{ args }) }
 
 /** A thin wrapper around an SQL statement */
 case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
@@ -65,9 +68,7 @@ case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
       stat = conn.underlying.prepareStatement(sql)
       fillStatement(stat)
       res = stat.executeQuery()
-
-      while res.next() do
-        elems += r.read(res)
+      while res.next() do elems += r.read(res)
     finally
       if res != null then res.close()
       if stat != null then stat.close()
@@ -75,37 +76,42 @@ case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
 
   def readOne[A]()(using Connection, Reader[A]): A = read[A]().head
 
-  def readOpt[A]()(using Connection, Reader[A]): Option[A] = read[A]().headOption
+  def readOpt[A]()(using Connection, Reader[A]): Option[A] =
+    read[A]().headOption
 
   def write()(using conn: Connection): Int =
     var stat: jsql.PreparedStatement = null
     try
-      stat = conn.underlying.prepareStatement(sql, jsql.Statement.RETURN_GENERATED_KEYS)
+      stat = conn.underlying.prepareStatement(
+        sql,
+        jsql.Statement.RETURN_GENERATED_KEYS,
+      )
       fillStatement(stat)
       stat.executeUpdate()
-    finally
-      if stat != null then stat.close()
-      
+    finally if stat != null then stat.close()
+
 end Query
 
 object Query:
 
   import scala.quoted.{Expr, Quotes, Varargs}
-  def sqlImpl(sc0: Expr[StringContext], args0: Expr[Seq[Any]])(using qctx: Quotes): Expr[Query] =
+
+  def sqlImpl(sc0: Expr[StringContext], args0: Expr[Seq[Any]])(using
+      qctx: Quotes,
+  ): Expr[Query] =
     import scala.quoted.quotes.reflect._
+
     val args: Seq[Expr[?]] = args0 match
       case Varargs(exprs) => exprs
-    val writers: Seq[Expr[SimpleWriter[?]]] = for (case '{ $arg: t } <- args) yield
-      val w = TypeRepr.of[SimpleWriter].appliedTo(
-        TypeRepr.of[t].widen
-      )
-
-      Implicits.search(w) match
-        case iss: ImplicitSearchSuccess =>
-          iss.tree.asExprOf[SimpleWriter[?]]
-        case isf: ImplicitSearchFailure =>
-          report.error(s"could not find implicit for ${w.show}", arg)
-          '{???}
+    val writers: Seq[Expr[SimpleWriter[?]]] =
+      for (case '{ $arg: t } <- args) yield
+        val w = TypeRepr.of[SimpleWriter].appliedTo(TypeRepr.of[t].widen)
+        Implicits.search(w) match
+          case iss: ImplicitSearchSuccess =>
+            iss.tree.asExprOf[SimpleWriter[?]]
+          case isf: ImplicitSearchFailure =>
+            report.error(s"could not find implicit for ${w.show}", arg)
+            '{ ??? }
 
     val qstring = sc0.value match
       case None =>
@@ -114,7 +120,7 @@ object Query:
       case Some(sc) =>
         val strings = sc.parts.iterator
         val buf = new StringBuilder(strings.next())
-        while(strings.hasNext) {
+        while (strings.hasNext) {
           buf.append(" ? ")
           buf.append(strings.next())
         }
@@ -122,20 +128,24 @@ object Query:
 
     val r = '{
       Query(
-        ${Expr(qstring)},
-        (stat: jsql.PreparedStatement) => ${
-          val exprs = for (((writer, arg), idx) <- writers.zip(args).zipWithIndex.toList) yield {
-            writer match {
-              case '{ $writer: SimpleWriter[t] } =>
-                '{$writer.write(stat, ${Expr(idx + 1)}, ${arg.asExprOf[t]})}
-            }
-          }
-          Expr.block(exprs, 'stat)
-        }
+        ${ Expr(qstring) },
+        (stat: jsql.PreparedStatement) =>
+          ${
+            val exprs =
+              for (((writer, arg), idx) <- writers.zip(args).zipWithIndex.toList)
+                yield writer match {
+                  case '{ $writer: SimpleWriter[t] } =>
+                    '{
+                      $writer.write(stat, ${ Expr(idx + 1) }, ${ arg.asExprOf[t] })
+                    }
+                }
+            Expr.block(exprs, 'stat)
+          },
       )
     }
-    //System.err.println(r.show)
+    // System.err.println(r.show)
     r
+  end sqlImpl
 
 end Query
 
@@ -154,17 +164,19 @@ object SimpleWriter:
   given SimpleWriter[Boolean] = (stat, idx, value) => stat.setBoolean(idx, value)
   given SimpleWriter[String] = (stat, idx, value) => stat.setString(idx, value)
   given SimpleWriter[Array[Byte]] = (stat, idx, value) => stat.setBytes(idx, value)
-  given SimpleWriter[BigDecimal] = (stat, idx, value) => stat.setBigDecimal(idx, value.bigDecimal)
+  given SimpleWriter[BigDecimal] = (stat, idx, value) =>
+    stat.setBigDecimal(idx, value.bigDecimal)
   given SimpleWriter[ju.UUID] = (stat, idx, value) => stat.setObject(idx, value)
-  given SimpleWriter[Instant] = (stat, idx, value) => stat.setTimestamp(idx, Timestamp.from(value))
+  given SimpleWriter[Instant] = (stat, idx, value) =>
+    stat.setTimestamp(idx, Timestamp.from(value))
 
   given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
-      def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]) = value match {
-        case Some (v) => writer.write (stat, idx, v)
-        case None => stat.setNull(idx, jsql.Types.NULL)
-    }
+    def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]): Unit =
+      value match {
+        case Some(v) => writer.write(stat, idx, v)
+        case None    => stat.setNull(idx, jsql.Types.NULL)
+      }
   }
-
 
 trait SimpleReader[+A]:
   def readIdx(results: jsql.ResultSet, idx: Int): A
@@ -228,8 +240,10 @@ object SimpleReader:
   end given
 
   given optReader[T](using reader: SimpleReader[T]): SimpleReader[Option[T]] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = Option(reader.readIdx(results, idx))
-    def readName(results: jsql.ResultSet, name: String) = Option(reader.readName(results, name))
+    override def readIdx(results: jsql.ResultSet, idx: Int): Option[T] =
+      Option(reader.readIdx(results, idx))
+    override def readName(results: jsql.ResultSet, name: String): Option[T] =
+      Option(reader.readName(results, name))
 
 trait Reader[A]:
   /** Read a row into the corresponding type. */
@@ -238,8 +252,8 @@ trait Reader[A]:
 object Reader:
 
   class ProductReader[A](
-    m: deriving.Mirror.ProductOf[A],
-    readers: Array[SimpleReader[?]]
+      m: deriving.Mirror.ProductOf[A],
+      readers: Array[SimpleReader[?]],
   ) extends Reader[A]:
     def read(results: jsql.ResultSet): A =
       val elems = new Array[Any](readers.length)
@@ -258,17 +272,17 @@ object Reader:
     new Reader[A]:
       def read(results: jsql.ResultSet): A = s.readIdx(results, 1)
 
+  inline def summonReaders[T <: Tuple]: List[SimpleReader[?]] =
+    inline compiletime.erasedValue[T] match
+      case _: EmptyTuple =>
+        Nil
+      case _: (t *: ts) =>
+        compiletime.summonInline[SimpleReader[t]] :: summonReaders[ts]
 
-  inline def summonReaders[T <: Tuple]: List[SimpleReader[?]] = inline compiletime.erasedValue[T] match
-    case _: EmptyTuple => Nil
-    case _: (t *: ts) => compiletime.summonInline[SimpleReader[t]] :: summonReaders[ts]
+  inline given [A <: Tuple](using m: deriving.Mirror.ProductOf[A]): Reader[A] =
+    ProductReader[A](m, summonReaders[m.MirroredElemTypes].toArray)
 
-  inline given [A <: Tuple](using m: deriving.Mirror.ProductOf[A]): Reader[A] = ProductReader[A](
-    m,
-    summonReaders[m.MirroredElemTypes].toArray
-  )
-
-  inline def derived[A]: Reader[A] = ${deriveImpl[A]}
+  inline def derived[A]: Reader[A] = ${ deriveImpl[A] }
 
   import scala.quoted.Expr
   import scala.quoted.Type
@@ -282,7 +296,7 @@ object Reader:
     // only an apply method
     if tsym.isEmpty || !tsym.get.flags.is(Flags.Case) then
       report.error("derivation of Readers is only supported for case classes")
-      return '{???}
+      return '{ ??? }
 
     val fields: List[Symbol] = tsym.get.primaryConstructor.paramSymss.flatten
 
@@ -296,26 +310,27 @@ object Reader:
         case isf: ImplicitSearchFailure =>
           report.error(s"no ${childTpe.show} found for ${field.fullName}")
           report.error(isf.explanation)
-          '{???}
+          '{ ??? }
 
-    val childNames: List[String] = for field <- fields yield
-      field.getAnnotation(TypeRepr.of[col].typeSymbol) match
-        case None => snakify(field.name)
+    val childNames: List[String] =
+      for field <- fields
+      yield field.getAnnotation(TypeRepr.of[col].typeSymbol) match
+        case None        => snakify(field.name)
         case Some(annot) =>
           annot.asExprOf[col] match
-            case '{col($x)} => x.valueOrAbort
+            case '{ col($x) } => x.valueOrAbort
 
     '{
       new Reader[A]:
         def read(results: jsql.ResultSet): A = ${
-          val reads: List[Term] = for (reader, name) <- childReaders.zip(childNames) yield
-            '{
-              ${reader}.readName(results, ${Expr(name)})
+          val reads: List[Term] =
+            for (reader, name) <- childReaders.zip(childNames) yield '{
+              ${ reader }.readName(results, ${ Expr(name) })
             }.asTerm
 
           Apply(
             Select(New(TypeTree.of[A]), tsym.get.primaryConstructor),
-            reads
+            reads,
           ).asExprOf[A]
 
         }
@@ -326,8 +341,7 @@ object Reader:
     val snake = new StringBuilder
     var prevIsLower = false
     for c <- camelCase do
-      if prevIsLower && c.isUpper then
-        snake += '_'
+      if prevIsLower && c.isUpper then snake += '_'
       snake += c.toLower
       prevIsLower = c.isLower
     snake.result()
@@ -350,8 +364,7 @@ class DataSource(getConnection: () => Connection):
       case ex: Throwable =>
         underlying.rollback()
         throw ex
-    finally
-      underlying.close()
+    finally underlying.close()
 
   def run[A](fn: Connection ?=> A): A =
     val conn = getConnection()
@@ -359,12 +372,15 @@ class DataSource(getConnection: () => Connection):
     try
       underlying.setAutoCommit(true)
       fn(using conn)
-    finally
-      underlying.close()
+    finally underlying.close()
 
 object DataSource:
 
-  def pooled(jdbcUrl: String, username: String = null, password: String = null) =
+  def pooled(
+      jdbcUrl: String,
+      username: String = null,
+      password: String = null,
+  ): DataSource =
     val ds = com.zaxxer.hikari.HikariDataSource()
     ds.setJdbcUrl(jdbcUrl)
     if username != null then ds.setUsername(username)

@@ -4,7 +4,7 @@ import utest.*
 
 object BasicTest extends TestSuite:
 
-  val tests = Tests{
+  val tests = Tests {
     test("basic") {
       val ds = simplesql.DataSource.pooled("jdbc:sqlite::memory:")
       ds.transaction:
@@ -18,27 +18,34 @@ object BasicTest extends TestSuite:
 
         // position-based products
         sql"select * from user".read[(Int, String, String)]() ==> Nil
-        sql"""insert into user values (${1}, ${"admin"}, ${"admin@example.org"})""".write() ==> 1
-        sql"select * from user".read[(Int, String, String)]() ==> (1, "admin", "admin@example.org") :: Nil
+        sql"""insert into user values
+              (${1}, ${"admin"}, ${"admin@example.org"})""".write() ==> 1
+        sql"select * from user".read[(Int, String, String)]() ==>
+          (1, "admin", "admin@example.org") :: Nil
 
         // named products
         case class User(id: Int, name: String, email: String) derives Reader
-        sql"select * from user".read[User]() ==> User(1, "admin", "admin@example.org") :: Nil
-        sql"select id,name,email from user".read[User]() ==> User(1, "admin", "admin@example.org") :: Nil
+        sql"select * from user".read[User]() ==>
+          User(1, "admin", "admin@example.org") :: Nil
+        sql"select id,name,email from user".read[User]() ==>
+          User(1, "admin", "admin@example.org") :: Nil
 
         // missing name
         intercept[java.sql.SQLException](
-          sql"select id,name from user".read[User]() ==> User(1, "admin", "admin@example.org") :: Nil
+          sql"select id,name from user".read[User]() ==>
+            User(1, "admin", "admin@example.org") :: Nil,
         )
 
         // missing index
         intercept[java.sql.SQLException](
-          sql"select id,name from user".read[(Int, String, String)]() ==> User(1, "admin", "admin@example.org") :: Nil
+          sql"select id,name from user".read[(Int, String, String)]() ==>
+            User(1, "admin", "admin@example.org") :: Nil,
         )
 
         // simple interpolation
         val id = 42
-        sql"""insert into user values ($id, "john", "john@smith.com")""".write() ==> 1
+        sql"""insert into user values ($id, "john", "john@smith.com")""".write() ==>
+          1
         sql"""select id from user where name='john'""".read[Int]() ==> 42 :: Nil
     }
     test("named") {
@@ -51,7 +58,8 @@ object BasicTest extends TestSuite:
             snakified_name text not null
           )
           """.write()
-      case class User(id: Int, snakifiedName: String, email: String) derives Reader // field names are out of order
+      // field names are out of order
+      case class User(id: Int, snakifiedName: String, email: String) derives Reader
 
       val u1 = User(1, "john", "john@example.org")
       val u2 = User(2, "josh", "josh@example.org")
@@ -59,8 +67,8 @@ object BasicTest extends TestSuite:
       ds.run:
         sql"""insert into user (id, snakified_name, email) values
           (${u1.id}, ${u1.snakifiedName}, ${u1.email}),
-          (${u2.id}, ${u2.snakifiedName}, ${u2.email})""".write() // TODO: implement writer derivation
-
+          (${u2.id}, ${u2.snakifiedName}, ${u2.email})"""
+          .write() // TODO: implement writer derivation
 
         sql"""select * from user""".read[User]() ==> List(u1, u2)
     }

@@ -4,8 +4,8 @@ import utest.*
 
 object NullTest extends TestSuite:
 
-  val tests = Tests{
-    test("null"){
+  val tests = Tests {
+    test("null") {
       val ds = DataSource.pooled("jdbc:sqlite::memory:")
       ds.transaction:
         sql"""
@@ -16,9 +16,13 @@ object NullTest extends TestSuite:
           )
         """.write()
 
-        sql"""insert into user values (${1}, ${Some("admin")}, ${"admin@example.org"})""".write() ==> 1
-        sql"""insert into user values (${2}, ${None: Option[String]}, ${"admin@example.org"})""".write() ==> 1
-        sql"""insert into user values (${3}, null, ${"admin@example.org"})""".write() ==> 1
+        sql"""insert into user values
+              (${1}, ${Some("admin")}, ${"admin@example.org"})""".write() ==> 1
+        sql"""insert into user values
+              (${2}, ${None: Option[String]}, ${"admin@example.org"})"""
+          .write() ==> 1
+        sql"""insert into user values
+              (${3}, null, ${"admin@example.org"})""".write() ==> 1
 
         case class User(id: Int, name: Option[String], email: String) derives Reader
         sql"select * from user".read[User]() ==>

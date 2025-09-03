@@ -28,5 +28,5 @@ object simplesql extends ScalaModule with ScalafmtModule with PublishModule {
     ivy"com.zaxxer:HikariCP:4.0.3", // connection pooling, provides a datasource
   )
 
-  object test extends ScalaTests with Utest
+  object test extends ScalaTests with Utest with ScalafmtModule
 }

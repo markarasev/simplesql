@@ -11,12 +11,18 @@ object NoConnectionFoundTest extends TestSuite:
         """ds.run:
   val query = sql"select * from user"
   query
-.read[Int]"""
-      ).check("", "No database connection found. Make sure to call this in a `run()` or `transaction()` block.")
+.read[Int]""",
+      ).check(
+        "",
+        "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
+      )
       val writeError = compileError(
         """ds.transaction:
   sql"insert into user values (1)"
-.write()"""
-      ).check("", "No database connection found. Make sure to call this in a `run()` or `transaction()` block.")
+.write()""",
+      ).check(
+        "",
+        "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
+      )
     }
   }
