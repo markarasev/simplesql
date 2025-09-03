@@ -39,11 +39,12 @@
  */
 package simplesql
 
-import java.{sql => jsql}
+import java.sql as jsql
+import java.sql.Timestamp
 import scala.deriving
 import scala.compiletime
 import scala.annotation
-import java.{util => ju}
+import java.util as ju
 import java.time.Instant
 
 @annotation.implicitNotFound("No database connection found. Make sure to call this in a `run()` or `transaction()` block.")
@@ -155,7 +156,7 @@ object SimpleWriter:
   given SimpleWriter[Array[Byte]] = (stat, idx, value) => stat.setBytes(idx, value)
   given SimpleWriter[BigDecimal] = (stat, idx, value) => stat.setBigDecimal(idx, value.bigDecimal)
   given SimpleWriter[ju.UUID] = (stat, idx, value) => stat.setObject(idx, value)
-  given SimpleWriter[Instant] = (stat, idx, value) => stat.setLong(idx, value.getEpochSecond())
+  given SimpleWriter[Instant] = (stat, idx, value) => stat.setTimestamp(idx, Timestamp.from(value))
 
   given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
       def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]) = value match {
@@ -215,8 +216,16 @@ object SimpleReader:
       result.getObject(name).asInstanceOf[ju.UUID]
 
   given SimpleReader[Instant] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = Instant.ofEpochSecond(results.getLong(idx))
-    def readName(results: jsql.ResultSet, name: String) = Instant.ofEpochSecond(results.getLong(name))
+
+    def readIdx(results: jsql.ResultSet, idx: Int): Instant =
+      val ts = results.getTimestamp(idx)
+      if (ts == null) null else ts.toInstant
+
+    def readName(results: jsql.ResultSet, name: String): Instant =
+      val ts = results.getTimestamp(name)
+      if (ts == null) null else ts.toInstant
+
+  end given
 
   given optReader[T](using reader: SimpleReader[T]): SimpleReader[Option[T]] with
     def readIdx(results: jsql.ResultSet, idx: Int) = Option(reader.readIdx(results, idx))
