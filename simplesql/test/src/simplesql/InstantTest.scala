@@ -9,7 +9,7 @@ object InstantTest extends TestSuite:
 
   val tests = Tests:
     "instant" - {
-      val ds = DataSource.pooled("jdbc:sqlite::memory:")
+      val ds = DataSource.simple("jdbc:sqlite::memory:")
       ds.run:
         sql"CREATE TABLE tests (id int PRIMARY KEY, ts timestampz)".write() ==> 0
         val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)

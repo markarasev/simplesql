@@ -40,7 +40,7 @@
 package simplesql
 
 import java.sql as jsql
-import java.sql.Timestamp
+import java.sql.{DriverManager, Timestamp}
 import scala.deriving
 import scala.compiletime
 import scala.annotation
@@ -375,6 +375,15 @@ class DataSource(getConnection: () => Connection):
     finally underlying.close()
 
 object DataSource:
+
+  def simple(
+      jdbcUrl: String,
+      username: String | Null = null,
+      password: String | Null = null,
+  ): DataSource =
+    DataSource(() =>
+      Connection(DriverManager.getConnection(jdbcUrl, username, password)),
+    )
 
   def pooled(
       jdbcUrl: String,
