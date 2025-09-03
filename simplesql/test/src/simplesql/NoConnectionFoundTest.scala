@@ -1,13 +1,12 @@
-import simplesql as sq
+package simplesql
 
 import utest.*
-import sq.sql
 
 object NoConnectionFoundTest extends TestSuite:
 
   val tests = Tests {
     test("connection already closed") {
-      val ds = sq.DataSource.pooled("jdbc:sqlite::memory:")
+      val ds = DataSource.pooled("jdbc:sqlite::memory:")
       val readError = compileError(
         """ds.run:
   val query = sql"select * from user"

@@ -1,7 +1,6 @@
-import utest.*
+package simplesql
 
-import simplesql as sq
-import simplesql.sql
+import utest.*
 
 object BasicTest extends TestSuite:
 
@@ -23,7 +22,7 @@ object BasicTest extends TestSuite:
         sql"select * from user".read[(Int, String, String)]() ==> (1, "admin", "admin@example.org") :: Nil
 
         // named products
-        case class User(id: Int, name: String, email: String) derives sq.Reader
+        case class User(id: Int, name: String, email: String) derives Reader
         sql"select * from user".read[User]() ==> User(1, "admin", "admin@example.org") :: Nil
         sql"select id,name,email from user".read[User]() ==> User(1, "admin", "admin@example.org") :: Nil
 
@@ -52,7 +51,7 @@ object BasicTest extends TestSuite:
             snakified_name text not null
           )
           """.write()
-      case class User(id: Int, snakifiedName: String, email: String) derives sq.Reader // field names are out of order
+      case class User(id: Int, snakifiedName: String, email: String) derives Reader // field names are out of order
 
       val u1 = User(1, "john", "john@example.org")
       val u2 = User(2, "josh", "josh@example.org")
@@ -71,7 +70,7 @@ object BasicTest extends TestSuite:
         sql"""create table entry (nameoverride text primary key)""".write()
         sql"""insert into entry (nameoverride) values ('foo')""".write()
 
-      case class Entry(@sq.col("nameoverride") columnName: String) derives sq.Reader
+      case class Entry(@col("nameoverride") columnName: String) derives Reader
 
       ds.run:
         sql"select * from entry".read[Entry]() ==> List(Entry("foo"))

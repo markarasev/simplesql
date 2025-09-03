@@ -1,12 +1,12 @@
+package simplesql
+
 import utest.*
-import simplesql as sq
-import simplesql.sql
 
 object NullTest extends TestSuite:
 
   val tests = Tests{
     test("null"){
-      val ds = simplesql.DataSource.pooled("jdbc:sqlite::memory:")
+      val ds = DataSource.pooled("jdbc:sqlite::memory:")
       ds.transaction:
         sql"""
           create table user (
@@ -20,7 +20,7 @@ object NullTest extends TestSuite:
         sql"""insert into user values (${2}, ${None: Option[String]}, ${"admin@example.org"})""".write() ==> 1
         sql"""insert into user values (${3}, null, ${"admin@example.org"})""".write() ==> 1
 
-        case class User(id: Int, name: Option[String], email: String) derives sq.Reader
+        case class User(id: Int, name: Option[String], email: String) derives Reader
         sql"select * from user".read[User]() ==>
           User(1, Some("admin"), "admin@example.org") ::
           User(2, None, "admin@example.org") ::

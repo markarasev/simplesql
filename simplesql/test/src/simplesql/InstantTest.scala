@@ -1,6 +1,5 @@
-import simplesql as sq
+package simplesql
 
-import sq.sql
 import utest.*
 
 import java.time.Instant
@@ -10,7 +9,7 @@ object InstantTest extends TestSuite:
 
   val tests = Tests:
     "instant" - {
-      val ds = sq.DataSource.pooled("jdbc:sqlite::memory:")
+      val ds = DataSource.pooled("jdbc:sqlite::memory:")
       ds.run:
         sql"CREATE TABLE tests (id int PRIMARY KEY, ts timestampz)".write() ==> 0
         val now = Instant.now().truncatedTo(ChronoUnit.MILLIS)
