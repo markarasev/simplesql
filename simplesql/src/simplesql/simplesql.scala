@@ -387,8 +387,8 @@ object DataSource:
 
   def pooled(
       jdbcUrl: String,
-      username: String = null,
-      password: String = null,
+      username: String | Null = null,
+      password: String | Null = null,
   ): DataSource =
     val ds = com.zaxxer.hikari.HikariDataSource()
     ds.setJdbcUrl(jdbcUrl)
