@@ -40,12 +40,12 @@
 package simplesql
 
 import java.sql as jsql
-import java.sql.{DriverManager, Timestamp}
+import java.sql.{Date, DriverManager, Timestamp}
 import scala.deriving
 import scala.compiletime
 import scala.annotation
 import java.util as ju
-import java.time.Instant
+import java.time.{Instant, LocalDate}
 
 @annotation.implicitNotFound(
   "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
@@ -169,6 +169,8 @@ object SimpleWriter:
   given SimpleWriter[ju.UUID] = (stat, idx, value) => stat.setObject(idx, value)
   given SimpleWriter[Instant] = (stat, idx, value) =>
     stat.setTimestamp(idx, Timestamp.from(value))
+  given SimpleWriter[LocalDate] = (stat, idx, value) =>
+    stat.setDate(idx, Date.valueOf(value))
 
   given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
     def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]): Unit =
@@ -177,6 +179,8 @@ object SimpleWriter:
         case None    => stat.setNull(idx, jsql.Types.NULL)
       }
   }
+
+end SimpleWriter
 
 trait SimpleReader[+A]:
   def readIdx(results: jsql.ResultSet, idx: Int): A
@@ -236,6 +240,18 @@ object SimpleReader:
     def readName(results: jsql.ResultSet, name: String): Instant =
       val ts = results.getTimestamp(name)
       if (ts == null) null else ts.toInstant
+
+  end given
+
+  given SimpleReader[LocalDate] with
+
+    override def readIdx(results: jsql.ResultSet, idx: Int): LocalDate =
+      val date = results.getDate(idx)
+      if (date != null) date.toLocalDate else null
+
+    override def readName(results: jsql.ResultSet, name: String): LocalDate =
+      val date = results.getDate(name)
+      if (date != null) date.toLocalDate else null
 
   end given
 
