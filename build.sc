@@ -9,7 +9,7 @@ trait Utest extends TestModule {
 }
 
 object simplesql extends ScalaModule with ScalafmtModule with PublishModule {
-  def scalaVersion = "3.3.5"
+  def scalaVersion = "3.3.6"
 
   def publishVersion = "0.1.0"
   def pomSettings = PomSettings(
