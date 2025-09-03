@@ -188,7 +188,7 @@ trait SimpleReader[+A]:
 
 object SimpleReader:
 
-  // TODO: safe NULLs? or at least throw an exception?
+  // TODO: safe nulls?
 
   given SimpleReader[Byte] with
     def readIdx(results: jsql.ResultSet, idx: Int) = results.getByte(idx)
@@ -257,13 +257,17 @@ object SimpleReader:
 
   end given
 
-  // FIXME: can't use with Option[PrimitiveType] since reader instances for
-  //  primitive types will never return null.
-  given optReader[T](using reader: SimpleReader[T]): SimpleReader[Option[T]] with
-    override def readIdx(results: jsql.ResultSet, idx: Int): Option[T] =
-      Option(reader.readIdx(results, idx))
-    override def readName(results: jsql.ResultSet, name: String): Option[T] =
-      Option(reader.readName(results, name))
+  given [A](using aReader: SimpleReader[A]): SimpleReader[Option[A]] with
+
+    override def readIdx(results: jsql.ResultSet, idx: Int): Option[A] =
+      val result = aReader.readIdx(results, idx)
+      if (results.wasNull()) None else Option(result)
+
+    override def readName(results: jsql.ResultSet, name: String): Option[A] =
+      val result = aReader.readName(results, name)
+      if (results.wasNull()) None else Option(result)
+
+  end given
 
 trait Reader[A]:
   /** Read a row into the corresponding type. */
