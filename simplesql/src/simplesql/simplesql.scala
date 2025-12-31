@@ -45,7 +45,7 @@ import scala.deriving
 import scala.compiletime
 import scala.annotation
 import java.util as ju
-import java.time.{Instant, LocalDate}
+import java.time.{Instant, LocalDate, Year}
 
 @annotation.implicitNotFound(
   "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
@@ -169,6 +169,7 @@ object SimpleWriter:
   given SimpleWriter[ju.UUID] = (stat, idx, value) => stat.setObject(idx, value)
   given SimpleWriter[Instant] = (stat, idx, value) =>
     stat.setTimestamp(idx, Timestamp.from(value))
+  given SimpleWriter[Year] = (stat, idx, value) => stat.setInt(idx, value.getValue)
   given SimpleWriter[LocalDate] = (stat, idx, value) =>
     stat.setDate(idx, Date.valueOf(value))
 
@@ -242,6 +243,17 @@ object SimpleReader:
     def readName(results: jsql.ResultSet, name: String): Instant =
       val ts = results.getTimestamp(name)
       if (ts == null) null else ts.toInstant
+
+  end given
+
+  given SimpleReader[Year] with
+    override def readIdx(results: jsql.ResultSet, idx: Int): Year =
+      val year = results.getInt(idx)
+      if (results.wasNull()) null else Year.of(year)
+
+    override def readName(results: jsql.ResultSet, name: String): Year =
+      val year = results.getInt(name)
+      if (results.wasNull()) null else Year.of(year)
 
   end given
 
