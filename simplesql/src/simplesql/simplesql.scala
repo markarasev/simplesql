@@ -394,22 +394,25 @@ class DataSource(getConnection: () => Connection):
 
 object DataSource:
 
-  def simple(
-      jdbcUrl: String,
-      username: String | Null = null,
-      password: String | Null = null,
-  ): DataSource =
-    DataSource(() =>
-      Connection(DriverManager.getConnection(jdbcUrl, username, password)),
-    )
+  def apply(getConnection: () => jsql.Connection): DataSource =
+    new DataSource(() => Connection(getConnection()))
 
-  def pooled(
-      jdbcUrl: String,
-      username: String | Null = null,
-      password: String | Null = null,
-  ): DataSource =
+  def simple(jdbcUrl: String): DataSource =
+    DataSource(() => DriverManager.getConnection(jdbcUrl))
+
+  def simple(jdbcUrl: String, username: String, password: String): DataSource =
+    DataSource(() => DriverManager.getConnection(jdbcUrl, username, password))
+
+  def pooled(jdbcUrl: String): DataSource =
     val ds = com.zaxxer.hikari.HikariDataSource()
     ds.setJdbcUrl(jdbcUrl)
-    if username != null then ds.setUsername(username)
-    if password != null then ds.setPassword(password)
-    DataSource(() => Connection(ds.getConnection()))
+    DataSource(ds.getConnection)
+
+  def pooled(jdbcUrl: String, username: String, password: String): DataSource =
+    val ds = com.zaxxer.hikari.HikariDataSource()
+    ds.setJdbcUrl(jdbcUrl)
+    ds.setUsername(username)
+    ds.setPassword(password)
+    DataSource(ds.getConnection)
+
+end DataSource
