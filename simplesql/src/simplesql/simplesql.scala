@@ -143,34 +143,46 @@ object Query:
           },
       )
     }
-    // System.err.println(r.show)
     r
   end sqlImpl
 
 end Query
 
-trait SimpleWriter[-A] {
+trait SimpleWriter[-A]:
+
+  def contramap[B](f: B => A): SimpleWriter[B] =
+    val outer = this
+    new SimpleWriter[B]:
+      override def write(stat: jsql.PreparedStatement, idx: Int, value: B): Unit =
+        outer.write(stat, idx, f(value))
+
   def write(stat: jsql.PreparedStatement, idx: Int, value: A): Unit
-}
+
+end SimpleWriter
 
 object SimpleWriter:
 
-  given SimpleWriter[Byte] = (stat, idx, value) => stat.setByte(idx, value)
-  given SimpleWriter[Short] = (stat, idx, value) => stat.setShort(idx, value)
-  given SimpleWriter[Int] = (stat, idx, value) => stat.setInt(idx, value)
-  given SimpleWriter[Long] = (stat, idx, value) => stat.setLong(idx, value)
-  given SimpleWriter[Float] = (stat, idx, value) => stat.setFloat(idx, value)
-  given SimpleWriter[Double] = (stat, idx, value) => stat.setDouble(idx, value)
-  given SimpleWriter[Boolean] = (stat, idx, value) => stat.setBoolean(idx, value)
-  given SimpleWriter[String] = (stat, idx, value) => stat.setString(idx, value)
-  given SimpleWriter[Array[Byte]] = (stat, idx, value) => stat.setBytes(idx, value)
-  given SimpleWriter[BigDecimal] = (stat, idx, value) =>
+  given byte: SimpleWriter[Byte] = (stat, idx, value) => stat.setByte(idx, value)
+  given short: SimpleWriter[Short] = (stat, idx, value) => stat.setShort(idx, value)
+  given int: SimpleWriter[Int] = (stat, idx, value) => stat.setInt(idx, value)
+  given long: SimpleWriter[Long] = (stat, idx, value) => stat.setLong(idx, value)
+  given float: SimpleWriter[Float] = (stat, idx, value) => stat.setFloat(idx, value)
+  given double: SimpleWriter[Double] = (stat, idx, value) =>
+    stat.setDouble(idx, value)
+  given boolean: SimpleWriter[Boolean] = (stat, idx, value) =>
+    stat.setBoolean(idx, value)
+  given string: SimpleWriter[String] = (stat, idx, value) =>
+    stat.setString(idx, value)
+  given byteArray: SimpleWriter[Array[Byte]] = (stat, idx, value) =>
+    stat.setBytes(idx, value)
+  given bigDecimal: SimpleWriter[BigDecimal] = (stat, idx, value) =>
     stat.setBigDecimal(idx, value.bigDecimal)
-  given SimpleWriter[UUID] = (stat, idx, value) => stat.setObject(idx, value)
-  given SimpleWriter[Instant] = (stat, idx, value) =>
+  given uuid: SimpleWriter[UUID] = (stat, idx, value) => stat.setObject(idx, value)
+  given instant: SimpleWriter[Instant] = (stat, idx, value) =>
     stat.setTimestamp(idx, jsql.Timestamp.from(value))
-  given SimpleWriter[Year] = (stat, idx, value) => stat.setInt(idx, value.getValue)
-  given SimpleWriter[LocalDate] = (stat, idx, value) =>
+  given year: SimpleWriter[Year] = (stat, idx, value) =>
+    stat.setInt(idx, value.getValue)
+  given localDate: SimpleWriter[LocalDate] = (stat, idx, value) =>
     stat.setDate(idx, jsql.Date.valueOf(value))
 
   given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
