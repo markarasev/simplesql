@@ -1,46 +1,111 @@
 package simplesql
 
 import utest.*
+import SimpleReader.given
+
+import java.time.{Instant, LocalDate, Year}
+import java.time.temporal.ChronoUnit
 
 object NullTest extends TestSuite:
 
-  val tests = Tests {
-    "nulls and Options" - {
-      val ds = DataSource.pooled("jdbc:sqlite::memory:")
-      "string" - {
-        ds.transaction:
-          sql"""
-          create table user (
-            id integer primary key,
-            name string,
-            email string not null
-          )
-        """.write()
+  private val ds = DataSource.simple("jdbc:sqlite::memory:")
 
-          sql"""insert into user values
-              (${1}, ${Some("admin")}, ${"admin@example.org"})""".write() ==> 1
-          sql"""insert into user values
-              (${2}, ${None: Option[String]}, ${"admin@example.org"})"""
-            .write() ==> 1
-          sql"""insert into user values
-              (${3}, null, ${"admin@example.org"})""".write() ==> 1
+  private def test[X: SimpleReader: SimpleWriter](
+      sqlType: String,
+      testValue: X,
+  )(using SimpleReader[Option[X]]) =
+    ds.run:
+      // TODO: add SQL literals support
+      val baseCreateTableQuery = sql"CREATE TABLE tests (x _type_to_replace_)"
+      baseCreateTableQuery
+        .copy(
+          sql = baseCreateTableQuery.sql.replaceFirst("_type_to_replace_", sqlType),
+        )
+        .write()
+      sql"INSERT INTO tests VALUES ($testValue), (null)".write()
+      case class TestXOption(x: Option[X]) derives Reader
+      case class TestX(x: X) derives Reader
 
-          case class User(id: Int, name: Option[String], email: String)
-              derives Reader
-          sql"select * from user".read[User]() ==>
-            User(1, Some("admin"), "admin@example.org") ::
-            User(2, None, "admin@example.org") ::
-            User(3, None, "admin@example.org") :: Nil
-      }
-      "primitive" - {
-        ds.run:
-          sql"CREATE TABLE tests(id int primary key, number int)".write() ==> 0
-          sql"INSERT INTO tests VALUES (0, null), (1, 0), (2, 1)".write() ==> 3
-          sql"SELECT number FROM tests".read[Option[Int]]() ==> Seq(
-            None,
-            Some(0),
-            Some(1),
-          )
-      }
+      sql"SELECT x FROM tests".read[Option[X]]() ==>
+        Seq(Some(testValue), None)
+      sql"SELECT x FROM tests".read[TestXOption]() ==>
+        Seq(TestXOption(Some(testValue)), TestXOption(None))
+      intercept[NoSuchElementException](sql"SELECT x FROM tests".read[X]())
+      intercept[NoSuchElementException](sql"SELECT x FROM tests".read[TestX]())
+  end test
+
+  override def tests: Tests = Tests {
+
+    "byte" - {
+      test[Byte](sqlType = "tinyint", testValue = 1)
     }
+
+    "short" - {
+      test[Short](sqlType = "smallint", testValue = 1)
+    }
+
+    "int" - {
+      test[Int](sqlType = "integer", testValue = 1)
+    }
+
+    "long" - {
+      test[Long](sqlType = "bigint", testValue = 1)
+    }
+
+    "float" - {
+      test[Float](sqlType = "real", testValue = 1)
+    }
+
+    "double" - {
+      test[Double](sqlType = "double", testValue = 1)
+    }
+
+    "boolean" - {
+      test(sqlType = "boolean", testValue = true)
+    }
+
+    "string" - {
+      test(sqlType = "text", testValue = "foo")
+    }
+
+    "byte array" - {
+      // arrays are not comparable by their content by default
+      val testValue: Array[Byte] = "foo".getBytes
+      case class TestOption(bytes: Option[Array[Byte]]) derives Reader
+      case class Test(bytes: Array[Byte]) derives Reader
+      ds.run:
+        sql"CREATE TABLE tests (bytes bytea)".write()
+        sql"INSERT INTO tests VALUES ($testValue), (null)".write()
+
+        sql"SELECT bytes FROM tests"
+          .read[Option[Array[Byte]]]()
+          .map(_.map(_.toSeq)) ==> Seq(Some(testValue.toSeq), None)
+        sql"SELECT bytes FROM tests"
+          .read[TestOption]()
+          .map(_.bytes.map(_.toSeq)) ==> Seq(Some(testValue.toSeq), None)
+        intercept[NoSuchElementException]:
+          sql"SELECT bytes FROM tests".read[Array[Byte]]()
+        intercept[NoSuchElementException]:
+          sql"SELECT bytes FROM tests".read[Test]()
+    }
+
+    // UUIDs seem to be unsupported by sqlite
+
+    "instant" - {
+      test(
+        sqlType = "timestampz",
+        testValue = Instant.now().truncatedTo(ChronoUnit.MILLIS),
+      )
+    }
+
+    "year" - {
+      test(sqlType = "int", testValue = Year.now())
+    }
+
+    "date" - {
+      test(sqlType = "datez", testValue = LocalDate.now())
+    }
+
   }
+
+end NullTest

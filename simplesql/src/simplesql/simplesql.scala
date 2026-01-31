@@ -40,12 +40,12 @@
 package simplesql
 
 import java.sql as jsql
-import java.sql.{Date, DriverManager, Timestamp}
+import java.sql.DriverManager
 import scala.deriving
 import scala.compiletime
 import scala.annotation
-import java.util as ju
 import java.time.{Instant, LocalDate, Year}
+import java.util.UUID
 
 @annotation.implicitNotFound(
   "No database connection found. Make sure to call this in a `run()` or `transaction()` block.",
@@ -166,12 +166,12 @@ object SimpleWriter:
   given SimpleWriter[Array[Byte]] = (stat, idx, value) => stat.setBytes(idx, value)
   given SimpleWriter[BigDecimal] = (stat, idx, value) =>
     stat.setBigDecimal(idx, value.bigDecimal)
-  given SimpleWriter[ju.UUID] = (stat, idx, value) => stat.setObject(idx, value)
+  given SimpleWriter[UUID] = (stat, idx, value) => stat.setObject(idx, value)
   given SimpleWriter[Instant] = (stat, idx, value) =>
-    stat.setTimestamp(idx, Timestamp.from(value))
+    stat.setTimestamp(idx, jsql.Timestamp.from(value))
   given SimpleWriter[Year] = (stat, idx, value) => stat.setInt(idx, value.getValue)
   given SimpleWriter[LocalDate] = (stat, idx, value) =>
-    stat.setDate(idx, Date.valueOf(value))
+    stat.setDate(idx, jsql.Date.valueOf(value))
 
   given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
     def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]): Unit =
@@ -185,101 +185,93 @@ end SimpleWriter
 
 trait SimpleReader[+A]:
   def readIdx(results: jsql.ResultSet, idx: Int): A
-  def readName(result: jsql.ResultSet, name: String): A
+  def readName(results: jsql.ResultSet, name: String): A
 
 object SimpleReader:
 
-  // TODO: safe nulls?
+  private def readNonNull[X, JsqlType](
+      _readIdx: jsql.ResultSet => Int => JsqlType,
+      _readName: jsql.ResultSet => String => JsqlType,
+      transform: JsqlType => X,
+  ): SimpleReader[X] =
+    new SimpleReader[X]:
+      override def readIdx(results: jsql.ResultSet, idx: Int): X =
+        val result = _readIdx(results)(idx)
+        if results.wasNull()
+        then throw new NoSuchElementException(s"null value at column index $idx")
+        else transform(result)
+      override def readName(results: jsql.ResultSet, name: String): X =
+        val result = _readName(results)(name)
+        if results.wasNull()
+        then throw new NoSuchElementException(s"null value for column name $name")
+        else transform(result)
 
-  given SimpleReader[Byte] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getByte(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getByte(name)
+  private def readNullable[X, JsqlType](
+      _readIdx: jsql.ResultSet => Int => JsqlType,
+      _readName: jsql.ResultSet => String => JsqlType,
+      transform: JsqlType => X,
+  ): SimpleReader[Option[X]] =
+    new SimpleReader[Option[X]]:
+      override def readIdx(results: jsql.ResultSet, idx: Int): Option[X] =
+        val result = _readIdx(results)(idx)
+        if results.wasNull() then None else Option(transform(result))
+      override def readName(results: jsql.ResultSet, name: String): Option[X] =
+        val result = _readName(results)(name)
+        if results.wasNull() then None else Option(transform(result))
 
-  given SimpleReader[Short] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getShort(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getShort(name)
+  given SimpleReader[Byte] = readNonNull(_.getByte, _.getByte, identity)
+  given obyter: SimpleReader[Option[Byte]] =
+    readNullable(_.getByte, _.getByte, identity)
 
-  given SimpleReader[Int] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getInt(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getInt(name)
+  given SimpleReader[Short] = readNonNull(_.getShort, _.getShort, identity)
+  given osr: SimpleReader[Option[Short]] =
+    readNullable(_.getShort, _.getShort, identity)
 
-  given SimpleReader[Long] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getLong(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getLong(name)
+  given SimpleReader[Int] = readNonNull(_.getInt, _.getInt, identity)
+  given ointr: SimpleReader[Option[Int]] = readNullable(_.getInt, _.getInt, identity)
 
-  given SimpleReader[Float] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getFloat(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getFloat(name)
+  given SimpleReader[Long] = readNonNull(_.getLong, _.getLong, identity)
+  given olr: SimpleReader[Option[Long]] =
+    readNullable(_.getLong, _.getLong, identity)
 
-  given SimpleReader[Double] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getDouble(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getDouble(name)
+  given SimpleReader[Float] = readNonNull(_.getFloat, _.getFloat, identity)
+  given ofr: SimpleReader[Option[Float]] =
+    readNullable(_.getFloat, _.getFloat, identity)
 
-  given SimpleReader[Boolean] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getBoolean(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getBoolean(name)
+  given SimpleReader[Double] = readNonNull(_.getDouble, _.getDouble, identity)
+  given odr: SimpleReader[Option[Double]] =
+    readNullable(_.getDouble, _.getDouble, identity)
 
-  given SimpleReader[String] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getString(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getString(name)
+  given SimpleReader[Boolean] = readNonNull(_.getBoolean, _.getBoolean, identity)
+  given oboolr: SimpleReader[Option[Boolean]] =
+    readNullable(_.getBoolean, _.getBoolean, identity)
 
-  given SimpleReader[Array[Byte]] with
-    def readIdx(results: jsql.ResultSet, idx: Int) = results.getBytes(idx)
-    def readName(results: jsql.ResultSet, name: String) = results.getBytes(name)
+  given SimpleReader[String] = readNonNull(_.getString, _.getString, identity)
+  given ostrr: SimpleReader[Option[String]] =
+    readNullable(_.getString, _.getString, identity)
 
-  given SimpleReader[ju.UUID] with
-    def readIdx(results: jsql.ResultSet, idx: Int): ju.UUID =
-      results.getObject(idx).asInstanceOf[ju.UUID]
+  given SimpleReader[Array[Byte]] = readNonNull(_.getBytes, _.getBytes, identity)
+  given obar: SimpleReader[Option[Array[Byte]]] =
+    readNullable(_.getBytes, _.getBytes, identity)
 
-    def readName(result: jsql.ResultSet, name: String): ju.UUID =
-      result.getObject(name).asInstanceOf[ju.UUID]
+  // Should UUIDs actually be retrieved the same way across databases?
+  given SimpleReader[UUID] =
+    // _.getObject(idx, getClass[UUID]) ?
+    readNonNull(_.getObject, _.getObject, _.asInstanceOf[UUID])
+  given ouuidr: SimpleReader[Option[UUID]] =
+    readNullable(_.getObject, _.getObject, _.asInstanceOf[UUID])
 
-  given SimpleReader[Instant] with
+  given SimpleReader[Instant] =
+    readNonNull(_.getTimestamp, _.getTimestamp, _.toInstant)
+  given oinstr: SimpleReader[Option[Instant]] =
+    readNullable(_.getTimestamp, _.getTimestamp, _.toInstant)
 
-    def readIdx(results: jsql.ResultSet, idx: Int): Instant =
-      val ts = results.getTimestamp(idx)
-      if (ts == null) null else ts.toInstant
+  given SimpleReader[Year] = readNonNull(_.getInt, _.getInt, Year.of)
+  given oyr: SimpleReader[Option[Year]] = readNullable(_.getInt, _.getInt, Year.of)
 
-    def readName(results: jsql.ResultSet, name: String): Instant =
-      val ts = results.getTimestamp(name)
-      if (ts == null) null else ts.toInstant
-
-  end given
-
-  given SimpleReader[Year] with
-    override def readIdx(results: jsql.ResultSet, idx: Int): Year =
-      val year = results.getInt(idx)
-      if (results.wasNull()) null else Year.of(year)
-
-    override def readName(results: jsql.ResultSet, name: String): Year =
-      val year = results.getInt(name)
-      if (results.wasNull()) null else Year.of(year)
-
-  end given
-
-  given SimpleReader[LocalDate] with
-
-    override def readIdx(results: jsql.ResultSet, idx: Int): LocalDate =
-      val date = results.getDate(idx)
-      if (date != null) date.toLocalDate else null
-
-    override def readName(results: jsql.ResultSet, name: String): LocalDate =
-      val date = results.getDate(name)
-      if (date != null) date.toLocalDate else null
-
-  end given
-
-  given [A](using aReader: SimpleReader[A]): SimpleReader[Option[A]] with
-
-    override def readIdx(results: jsql.ResultSet, idx: Int): Option[A] =
-      val result = aReader.readIdx(results, idx)
-      if (results.wasNull()) None else Option(result)
-
-    override def readName(results: jsql.ResultSet, name: String): Option[A] =
-      val result = aReader.readName(results, name)
-      if (results.wasNull()) None else Option(result)
-
-  end given
+  given SimpleReader[LocalDate] = readNonNull(_.getDate, _.getDate, _.toLocalDate)
+  given oldr: SimpleReader[Option[LocalDate]] =
+    readNullable(_.getDate, _.getDate, _.toLocalDate)
 
 trait Reader[A]:
   /** Read a row into the corresponding type. */
