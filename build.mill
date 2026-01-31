@@ -1,0 +1,31 @@
+import mill._, scalalib._, scalafmt._, publish._
+
+object simplesql extends ScalaModule with ScalafmtModule with PublishModule:
+
+  override def scalaVersion = "3.3.7"
+  override def scalacOptions = Seq.empty[String]
+
+  override def publishVersion = "0.2.1"
+  override def pomSettings = PomSettings(
+    description = "Simple SQL queries around JDBC",
+    organization = "me.markarasev",
+    url = "https://github.com/markarasev/simplesql",
+    licenses = Seq(License.`BSD-3-Clause`),
+    versionControl = VersionControl.github("markarasev", "simplesql"),
+    developers = Seq(
+      Developer("jodersky", "Jakob Odersky", "https://github.com/jodersky"),
+      Developer("markarasev", "Marc Karassev", "https://github.com/markarasev"),
+    ),
+  )
+
+  override def mvnDeps = Seq(
+    mvn"com.zaxxer:HikariCP:4.0.3", // connection pooling, provides a datasource
+  )
+
+  object test extends ScalaTests, TestModule.Utest, ScalafmtModule:
+    override def utestVersion = "0.8.9"
+    override def mvnDeps = Seq(
+      mvn"org.xerial:sqlite-jdbc:3.32.3.2",
+    )
+
+end simplesql
