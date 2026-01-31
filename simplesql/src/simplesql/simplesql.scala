@@ -184,8 +184,20 @@ object SimpleWriter:
 end SimpleWriter
 
 trait SimpleReader[+A]:
+
   def readIdx(results: jsql.ResultSet, idx: Int): A
+
   def readName(results: jsql.ResultSet, name: String): A
+
+  final def map[B](f: A => B): SimpleReader[B] =
+    val outer = this
+    new SimpleReader[B]:
+      override def readIdx(results: jsql.ResultSet, idx: Int): B =
+        f(outer.readIdx(results, idx))
+      override def readName(results: jsql.ResultSet, name: String): B =
+        f(outer.readName(results, name))
+
+end SimpleReader
 
 object SimpleReader:
 
@@ -206,72 +218,38 @@ object SimpleReader:
         then throw new NoSuchElementException(s"null value for column name $name")
         else transform(result)
 
-  private def readNullable[X, JsqlType](
-      _readIdx: jsql.ResultSet => Int => JsqlType,
-      _readName: jsql.ResultSet => String => JsqlType,
-      transform: JsqlType => X,
-  ): SimpleReader[Option[X]] =
-    new SimpleReader[Option[X]]:
-      override def readIdx(results: jsql.ResultSet, idx: Int): Option[X] =
-        val result = _readIdx(results)(idx)
-        if results.wasNull() then None else Option(transform(result))
-      override def readName(results: jsql.ResultSet, name: String): Option[X] =
-        val result = _readName(results)(name)
-        if results.wasNull() then None else Option(transform(result))
+  given [X](using reader: SimpleReader[X]): SimpleReader[Option[X]] with
+    override def readIdx(results: jsql.ResultSet, idx: Int): Option[X] =
+      if results.getObject(idx) == null then None
+      else Some(reader.readIdx(results, idx))
+    override def readName(results: jsql.ResultSet, name: String): Option[X] =
+      if results.getObject(name) == null then None
+      else Some(reader.readName(results, name))
 
-  given SimpleReader[Byte] = readNonNull(_.getByte, _.getByte, identity)
-  given obyter: SimpleReader[Option[Byte]] =
-    readNullable(_.getByte, _.getByte, identity)
-
-  given SimpleReader[Short] = readNonNull(_.getShort, _.getShort, identity)
-  given osr: SimpleReader[Option[Short]] =
-    readNullable(_.getShort, _.getShort, identity)
-
-  given SimpleReader[Int] = readNonNull(_.getInt, _.getInt, identity)
-  given ointr: SimpleReader[Option[Int]] = readNullable(_.getInt, _.getInt, identity)
-
-  given SimpleReader[Long] = readNonNull(_.getLong, _.getLong, identity)
-  given olr: SimpleReader[Option[Long]] =
-    readNullable(_.getLong, _.getLong, identity)
-
-  given SimpleReader[Float] = readNonNull(_.getFloat, _.getFloat, identity)
-  given ofr: SimpleReader[Option[Float]] =
-    readNullable(_.getFloat, _.getFloat, identity)
-
-  given SimpleReader[Double] = readNonNull(_.getDouble, _.getDouble, identity)
-  given odr: SimpleReader[Option[Double]] =
-    readNullable(_.getDouble, _.getDouble, identity)
-
-  given SimpleReader[Boolean] = readNonNull(_.getBoolean, _.getBoolean, identity)
-  given oboolr: SimpleReader[Option[Boolean]] =
-    readNullable(_.getBoolean, _.getBoolean, identity)
-
-  given SimpleReader[String] = readNonNull(_.getString, _.getString, identity)
-  given ostrr: SimpleReader[Option[String]] =
-    readNullable(_.getString, _.getString, identity)
-
-  given SimpleReader[Array[Byte]] = readNonNull(_.getBytes, _.getBytes, identity)
-  given obar: SimpleReader[Option[Array[Byte]]] =
-    readNullable(_.getBytes, _.getBytes, identity)
-
+  given byte: SimpleReader[Byte] = readNonNull(_.getByte, _.getByte, identity)
+  given short: SimpleReader[Short] = readNonNull(_.getShort, _.getShort, identity)
+  given int: SimpleReader[Int] = readNonNull(_.getInt, _.getInt, identity)
+  given long: SimpleReader[Long] = readNonNull(_.getLong, _.getLong, identity)
+  given float: SimpleReader[Float] = readNonNull(_.getFloat, _.getFloat, identity)
+  given double: SimpleReader[Double] =
+    readNonNull(_.getDouble, _.getDouble, identity)
+  given boolean: SimpleReader[Boolean] =
+    readNonNull(_.getBoolean, _.getBoolean, identity)
+  given string: SimpleReader[String] =
+    readNonNull(_.getString, _.getString, identity)
+  given byteArray: SimpleReader[Array[Byte]] =
+    readNonNull(_.getBytes, _.getBytes, identity)
   // Should UUIDs actually be retrieved the same way across databases?
-  given SimpleReader[UUID] =
+  given uuid: SimpleReader[UUID] =
     // _.getObject(idx, getClass[UUID]) ?
     readNonNull(_.getObject, _.getObject, _.asInstanceOf[UUID])
-  given ouuidr: SimpleReader[Option[UUID]] =
-    readNullable(_.getObject, _.getObject, _.asInstanceOf[UUID])
-
-  given SimpleReader[Instant] =
+  given instant: SimpleReader[Instant] =
     readNonNull(_.getTimestamp, _.getTimestamp, _.toInstant)
-  given oinstr: SimpleReader[Option[Instant]] =
-    readNullable(_.getTimestamp, _.getTimestamp, _.toInstant)
+  given year: SimpleReader[Year] = readNonNull(_.getInt, _.getInt, Year.of)
+  given localDate: SimpleReader[LocalDate] =
+    readNonNull(_.getDate, _.getDate, _.toLocalDate)
 
-  given SimpleReader[Year] = readNonNull(_.getInt, _.getInt, Year.of)
-  given oyr: SimpleReader[Option[Year]] = readNullable(_.getInt, _.getInt, Year.of)
-
-  given SimpleReader[LocalDate] = readNonNull(_.getDate, _.getDate, _.toLocalDate)
-  given oldr: SimpleReader[Option[LocalDate]] =
-    readNullable(_.getDate, _.getDate, _.toLocalDate)
+end SimpleReader
 
 trait Reader[A]:
   /** Read a row into the corresponding type. */
