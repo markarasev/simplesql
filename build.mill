@@ -1,4 +1,4 @@
-import mill._, scalalib._, scalafmt._, publish._
+import mill.*, scalalib.*, scalafmt.*, publish.*
 
 object simplesql extends ScalaModule with ScalafmtModule with PublishModule:
 

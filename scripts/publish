@@ -1,8 +1,7 @@
 #!/bin/bash
 
-./mill mill.scalalib.PublishModule/publishAll \
-    --sonatypeUri https://maven.pkg.github.com/markarasev/simplesql \
-    --sonatypeCreds markarasev:$GITHUB_TOKEN\
-    --signed false \
-    --publishArtifacts __.publishArtifacts \
-    --stagingRelease false
+./mill mill.javalib.MavenPublishModule/ \
+    --releaseUri https://maven.pkg.github.com/markarasev/simplesql \
+    --snapshotUri https://maven.pkg.github.com/markarasev/simplesql \
+    --username markarasev \
+    --password $GITHUB_TOKEN
