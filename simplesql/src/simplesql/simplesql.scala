@@ -2,6 +2,7 @@
  * https://github.com/jodersky/simplesql
  *
  * Copyright 2020 Jakob Odersky <jakob@odersky.com>
+ * Copyright 2026 Marc Karassev <hello@markarasev.me>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
