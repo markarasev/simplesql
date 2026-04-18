@@ -58,7 +58,18 @@ extension (inline sc: StringContext)
     ${ Query.sqlImpl('{ sc }, '{ args }) }
 
 /** A thin wrapper around an SQL statement */
-case class Query(sql: String, fillStatement: jsql.PreparedStatement => Unit):
+case class Query(sql: String, args: Seq[Query.ArgFiller[?]]):
+
+  def ++(other: Query): Query = Query(
+    sql = sql ++ other.sql,
+    args = args ++ other.args,
+  )
+
+  def concat(other: Query): Query = ++(other)
+
+  private def fillStatement(stat: jsql.PreparedStatement): Unit =
+    for (filler, idx) <- args.zipWithIndex
+    yield filler.writer.write(stat, idx + 1, filler.arg)
 
   def read[A]()(using conn: Connection, r: Reader[A]): List[A] =
     val elems = collection.mutable.ListBuffer.empty[A]
@@ -97,6 +108,8 @@ object Query:
 
   import scala.quoted.{Expr, Quotes, Varargs}
 
+  case class ArgFiller[A](writer: SimpleWriter[A], arg: A)
+
   def sqlImpl(sc0: Expr[StringContext], args0: Expr[Seq[Any]])(using
       qctx: Quotes,
   ): Expr[Query] =
@@ -127,25 +140,24 @@ object Query:
         }
         buf.result()
 
-    val r = '{
+    '{
       Query(
         ${ Expr(qstring) },
-        (stat: jsql.PreparedStatement) =>
-          ${
-            val exprs =
-              for (((writer, arg), idx) <- writers.zip(args).zipWithIndex.toList)
-                yield writer match {
-                  case '{ $writer: SimpleWriter[t] } =>
-                    '{
-                      $writer.write(stat, ${ Expr(idx + 1) }, ${ arg.asExprOf[t] })
-                    }
+        ${
+          val seq =
+            for (writer, arg) <- writers.zip(args)
+            yield writer match
+              case '{ $writer: SimpleWriter[t] } =>
+                '{
+                  ArgFiller($writer, ${ arg.asExprOf[t] })
                 }
-            Expr.block(exprs, 'stat)
-          },
+          Expr.ofSeq(seq)
+        },
       )
     }
-    r
   end sqlImpl
+
+  def concat(query1: Query, queries: Query*): Query = queries.fold(query1)(_ ++ _)
 
 end Query
 
