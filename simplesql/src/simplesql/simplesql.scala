@@ -68,8 +68,15 @@ case class Query(sql: String, args: Seq[Query.ArgFiller[?]]):
   def concat(other: Query): Query = ++(other)
 
   private def fillStatement(stat: jsql.PreparedStatement): Unit =
-    for (filler, idx) <- args.zipWithIndex
-    yield filler.writer.write(stat, idx + 1, filler.arg)
+    args.foldLeft(1): (idx, filler) =>
+      filler.arg match
+        case in: Query.InParam[?] =>
+          filler.writer.write(stat, idx, in)
+          // this is a bit ugly... maybe writer.write could return the next placeholder index to write?
+          idx + in.values.size
+        case _ =>
+          filler.writer.write(stat, idx, filler.arg)
+          idx + 1
 
   def read[A]()(using conn: Connection, r: Reader[A]): List[A] =
     val elems = collection.mutable.ListBuffer.empty[A]
@@ -127,22 +134,31 @@ object Query:
             report.error(s"could not find implicit for ${w.show}", arg)
             '{ ??? }
 
-    val qstring = sc0.value match
+    val sqlStringExpr = sc0.value match
       case None =>
         report.error("string context must be known at compile time", sc0)
-        ""
+        Expr("")
       case Some(sc) =>
-        val strings = sc.parts.iterator
-        val buf = new StringBuilder(strings.next())
-        while (strings.hasNext) {
-          buf.append(" ? ")
-          buf.append(strings.next())
-        }
-        buf.result()
+        val partExprs = sc.parts.map(Expr.apply)
+        partExprs.tail
+          .zip(args)
+          .foldLeft(partExprs.head):
+            case (acc, (part, arg)) =>
+              val placeholder: Expr[String] = '{
+                ${ arg } match
+                  case x: AnyRef =>
+                    x match
+                      // report error if acc doesn't end with " IN "?
+                      case in: InParam[?] => in.placeholderString
+                      case _              => " ? "
+                  case _ =>
+                    " ? "
+              }
+              '{ ${ acc } ++ ${ placeholder } ++ ${ part } }
 
     '{
       Query(
-        ${ Expr(qstring) },
+        ${ sqlStringExpr },
         ${
           val seq =
             for (writer, arg) <- writers.zip(args)
@@ -156,6 +172,28 @@ object Query:
       )
     }
   end sqlImpl
+
+  case class InParam[A] private (values: Set[A]):
+    def placeholderString: String =
+      values.toSeq.map(_ => "?").mkString(" (", ", ", ") ")
+
+  object InParam:
+
+    def apply[A](value1: A, values: A*): InParam[A] =
+      InParam(values.toSet + value1)
+
+    def from[A](values: Set[A]): Option[InParam[A]] =
+      if values.isEmpty then None else Some(InParam(values))
+
+    def unsafeFrom[A](values: Set[A]): InParam[A] =
+      if values.isEmpty
+      then
+        throw IllegalArgumentException(
+          s"IN predicate right hand side must be non-empty",
+        )
+      else InParam(values)
+
+  end InParam
 
   def concat(query1: Query, queries: Query*): Query = queries.fold(query1)(_ ++ _)
 
@@ -198,13 +236,22 @@ object SimpleWriter:
   given localDate: SimpleWriter[LocalDate] = (stat, idx, value) =>
     stat.setDate(idx, jsql.Date.valueOf(value))
 
-  given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with {
+  given optWriter[A](using writer: SimpleWriter[A]): SimpleWriter[Option[A]] with
     def write(stat: jsql.PreparedStatement, idx: Int, value: Option[A]): Unit =
       value match {
         case Some(v) => writer.write(stat, idx, v)
         case None    => stat.setNull(idx, jsql.Types.NULL)
       }
-  }
+
+  given [A](using writer: SimpleWriter[A]): SimpleWriter[Query.InParam[A]] with
+    override def write(
+        stat: jsql.PreparedStatement,
+        idx: Int,
+        inParam: Query.InParam[A],
+    ): Unit =
+      inParam.values.foldLeft(idx): (index, value) =>
+        writer.write(stat, index, value)
+        index + 1
 
 end SimpleWriter
 
