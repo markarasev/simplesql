@@ -357,8 +357,16 @@ object Reader:
       case _: (t *: ts) =>
         compiletime.summonInline[SimpleReader[t]] :: summonReaders[ts]
 
-  inline given [A <: Tuple](using m: deriving.Mirror.ProductOf[A]): Reader[A] =
-    ProductReader[A](m, summonReaders[m.MirroredElemTypes].toArray)
+  inline given [A <: Tuple]: Reader[A] =
+    val readers = summonReaders[A]
+    new Reader[A]:
+      override def read(results: jsql.ResultSet): A =
+        readers.zipWithIndex
+          .foldLeft[Tuple](EmptyTuple) { case (acc, (reader, i)) =>
+            acc :* reader.readIdx(results, i + 1)
+          }
+          .asInstanceOf[A]
+    end new
 
   inline def derived[A]: Reader[A] = ${ deriveImpl[A] }
 
